@@ -73,7 +73,18 @@ response: json
 ]
 ```
 
-#### 2. db schema
+#### 2. core
+
+File will be stored in the two parts: meta data and file content. 
+
+##### 1. Meta data
+Meta data is stored in file history table. Every time when a file is modified, a new record will be inserted into the file history table. The file history table will record the file version, slices and slices hash. Slices is ordered array and slices hash is the hash of every slice.
+
+##### 2. File content
+Every file content will be cut into slices and max size of every slice is 4MB and slice_id is uuid. Hash of slice can't be used as slice_id because the hash of slice is not unique. File content will be stored in the file system or s3 or azure blob or etc. Slices store sturcture is `slice_id[0]/slice_id[1]/slice_id`. This is to avoid some directories is too big to load slowly, but it remains to be verified.
+
+
+#### 3. db schema
 postgres sql
 ##### 1. user 
 ```sql
@@ -103,14 +114,15 @@ create table file (
 );
 ```
 
-##### 3. file content
+##### 3. file history 
 ```sql
 create table file_history (
     id bigint not null primary key,
     fid bigint not null,
     file_version int not null,
-    -- slice is blob
+    -- slice is array
     slices text[] not null,
+    slices_hash text[] not null,
     create_time datetime default current_timestamp,
     update_time datetime default current_timestamp on update current_timestamp
 );
