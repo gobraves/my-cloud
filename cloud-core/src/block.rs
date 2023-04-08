@@ -1,56 +1,50 @@
+pub mod fs_handler;
+pub mod s3_handler;
 use anyhow::Result;
 use bytes::Bytes;
-use std::fmt::format;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::Path;
-use ring::digest::{Context, Digest, SHA256};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+pub struct BlockHandlerWrapper<BH: BlockHandler>(pub Arc<BlockHandlerInner<BH>>);
+
+pub struct BlockHandlerInner<BH: BlockHandler>{
+    pub block_handler: BH,
+}
+
+impl <BH: BlockHandler> BlockHandlerWrapper<BH> {
+    pub fn new(block_handler: BH) -> Self {
+        Self(Arc::new(BlockHandlerInner { block_handler }))
+    }
+}
+
+pub trait BlockHandler {
+    fn write_blocks(&self, blocks: Vec<Block>) -> Result<()>;
+    fn get_blocks(&self, blocks_name: Vec<&str>) -> Result<Vec<Block>>;
+}
 
 pub struct Block {
-    data: Bytes,
-    name: String,
+    pub name: String,
+    pub data: Bytes,
 }
 
 impl Block {
-    pub fn new(name: String, data: Bytes) -> Self {
-        Self { data, name } }
-
-    pub fn write_block(&self, target_dir: &str) -> Result<()> {
-        let path = Path::new(target_dir).join(
-            format(format_args!(
-                "{}/{}/{}",
-                self.name.chars().nth(0).unwrap(),
-                self.name.chars().nth(1).unwrap(),
-                self.name
-            ))
-            .as_str(),
-        );
-        if !path.exists() {
-            std::fs::create_dir_all(path.parent().unwrap())?;
-        }
-        let mut file = File::create(path)?;
-        file.write_all(&self.data)?;
-        Ok(())
+    pub fn new(block_name: String, data: Bytes) -> Self {
+        Self { name: block_name, data} 
     }
 
-    pub fn parse_block(target_dir: &str, filename: String) -> Result<Self> {
-        let path = Path::new(target_dir).join(
-            format(format_args!(
-                "{}/{}/{}",
-                filename.chars().nth(0).unwrap(),
-                filename.chars().nth(1).unwrap(),
-                filename
-            ))
-            .as_str(),
-        );
-        let mut file = File::open(path)?;
-        let mut data = Vec::new();
-        file.read_to_end(&mut data)?;
-
-        let block = Self::new(filename, Bytes::from(data));
-
-        Ok(block)
+    pub fn path(&self) -> PathBuf {
+        let first_parent_dir = self.name.chars().nth(0).unwrap().to_owned().to_string();
+        let second_parent_dir = self.name.chars().nth(1).unwrap().to_owned().to_string();
+        Path::new(&first_parent_dir).join(&second_parent_dir).join(&self.name).to_path_buf()
     }
+}
+
+fn block_path_by_filename(block_name: String) -> Result<PathBuf> {
+    let first_parent_dir = block_name.chars().nth(0).unwrap().to_owned().to_string();
+    let second_parent_dir = block_name.chars().nth(1).unwrap().to_owned().to_string();
+    let path = Path::new(&first_parent_dir).join(&second_parent_dir).join(&block_name);
+
+    Ok(path)
 }
 
 
