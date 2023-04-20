@@ -12,11 +12,11 @@ impl S3Handler {
 }
 
 impl BlockHandler for S3Handler {
-    fn get_blocks(&self, blocks_name: Vec<&str>) -> Result<Vec<Block>> {
+    fn write_blocks(&self, blocks: Vec<Block>) -> Result<()> {
         unimplemented!()
     }
 
-    fn write_blocks(&self, blocks: Vec<Block>) -> Result<()> {
+    fn get_blocks(&self, blocks_name: Vec<&str>) -> Result<Vec<Block>> {
         unimplemented!()
     }
 }

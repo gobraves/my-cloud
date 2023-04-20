@@ -7,6 +7,8 @@ use sqlx::error::DatabaseError;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use thiserror::Error;
+use redis::RedisError;
+use serde_json;
 use log;
 
 /// A common error type that can be used throughout the API.
@@ -43,6 +45,12 @@ pub enum CustomError {
 
     #[error("an error occurred with the database")]
     Sqlx(#[from] sqlx::Error),
+
+    #[error("an error occurred with the redis")]
+    Redis(#[from] RedisError),
+
+    #[error("an error occurred with the serde json")]
+    Json(#[from] serde_json::Error),
 
     /// Return `500 Internal Server Error` on a `anyhow::Error`.
     ///
@@ -90,7 +98,7 @@ impl CustomError {
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::UnprocessableEntity { .. } | Self::MultipartError(_) => StatusCode::UNPROCESSABLE_ENTITY,
-            Self::Sqlx(_) | Self::Anyhow(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Json(_) | Self::Redis(_) | Self::Sqlx(_) | Self::Anyhow(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -141,6 +149,18 @@ impl IntoResponse for CustomError {
                 // TODO: we probably want to use `tracing` instead
                 // so that this gets linked to the HTTP request by `TraceLayer`.
                 log::error!("Generic error: {:?}", e);
+            }
+
+            Self::Json(ref e) => {
+                log::error!("Json error: {:?}", e);
+            }
+
+            Self::MultipartError(ref e) => {
+                log::error!("MultipartError error: {:?}", e);
+            }
+
+            Self::Redis(ref e) => {
+                log::error!("Redis error: {:?}", e);
             }
 
             // Other errors get mapped normally.

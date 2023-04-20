@@ -1,10 +1,11 @@
-use crate::block::fs_handler::{FsHandler, self};
+use crate::block::fs_handler::FsHandler;
 use crate::block::{Block, BlockHandler};
 use crate::db_schema::files::Files as DbFile;
 use anyhow::Result;
 use bytes::Bytes;
 use sqlx::PgPool;
 use super::inner_utils;
+use cloud_utils::digest;
 use uuid::Uuid;
 use std::sync::Arc;
 
@@ -19,7 +20,7 @@ impl CloudFile {
     pub fn new(name: &str, data: Bytes, is_dir: bool) -> Self {
         let hash = match is_dir {
             true => "".to_string(),
-            false => inner_utils::sha256_digest(&data),
+            false => digest::sha256_digest(&data),
         };
 
         Self {
@@ -31,18 +32,30 @@ impl CloudFile {
 
     pub async fn create_new_dir(
         &self,
+        ws_id: Uuid,
         uid: Uuid,
         parent_dir_id: i64,
         id: i64,
         pool: &PgPool,
     ) -> Result<DbFile> {
-        let dir = DbFile::insert_dir(id, uid, self.name.as_str(), parent_dir_id, pool).await?;
+        let db_file = DbFile::new(
+            id,
+            uid,
+            ws_id,
+            self.name.clone(),
+            parent_dir_id,
+            0,
+            false,
+        );
+
+        let dir = db_file.insert_dir(pool).await?;
         Ok(dir)
     }
 
     // TODO: support generic block handler
     pub async fn store_new_file(
         &self,
+        ws_id: Uuid,
         uid: Uuid,
         parent_dir_id: i64,
         file_id: i64,
@@ -60,9 +73,10 @@ impl CloudFile {
         let db_file = DbFile::new(
             file_id,
             uid,
+            ws_id,
             self.name.clone(),
-            file_size,
             parent_dir_id,
+            file_size,
             false,
         );
 

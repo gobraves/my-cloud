@@ -9,6 +9,7 @@ use uuid::Uuid;
 pub struct Files {
     pub id: i64,
     pub uid: Uuid,
+    pub ws_id: Uuid,
     pub filename: String,
     pub parent_dir_id: i64,
     pub is_deleted: bool,
@@ -20,10 +21,25 @@ pub struct Files {
 }
 
 impl Files {
-    pub fn  new(id: i64, uid: Uuid, filename: String, parent_dir_id: i64, size: i64, is_dir: bool) -> Self {
+    pub fn root_dir(ws_id: Uuid, uid: Uuid, filename: String) -> Self {
+        Files {
+            id: -1,
+            uid,
+            ws_id,
+            filename,
+            parent_dir_id: -2,
+            size: 0,
+            is_dir: true,
+            is_deleted: false,
+            version: 1,
+        }
+    }
+
+    pub fn new(id: i64, uid: Uuid, ws_id: Uuid, filename: String, parent_dir_id: i64, size: i64, is_dir: bool) -> Self {
         Files {
             id,
             uid,
+            ws_id,
             filename,
             parent_dir_id,
             size,
@@ -37,11 +53,12 @@ impl Files {
         Files {
             id: row.get("id"),
             uid: row.get("uid"),
+            ws_id: row.get("ws_id"),
             filename: row.get("filename"),
             parent_dir_id: row.get("parent_dir_id"),
             size: row.get("size"),
             is_dir: row.get("is_dir"),
-            is_deleted: row.get("is_delete"),
+            is_deleted: row.get("is_deleted"),
             version: row.get("version"),
         }
     }
@@ -53,7 +70,7 @@ impl Files {
         filename: &str,
         pool: &PgPool,
     ) -> Result<Files, sqlx::Error> {
-        let row = sqlx::query("SELECT * FROM files WHERE parent_dir_id = $1 and uid = $2 and filename = $3 and is_delete = false")
+        let row = sqlx::query("SELECT * FROM files WHERE parent_dir_id = $1 and uid = $2 and filename = $3 and is_deleted = false")
             .bind(parent_dir_id)
             .bind(uid)
             .bind(filename)
@@ -68,7 +85,7 @@ impl Files {
         id: i64,
         pool: &PgPool,
     ) -> Result<PgRow, sqlx::Error> {
-        let row = sqlx::query("SELECT a.id, a.filename, a.size, a.is_dir, b.slices, b.slices_hash FROM file as a join file_history as b on a.id = b.id and a.version = b.version WHERE a.uid = $1 and a.id = $2 and is_delete = false")
+        let row = sqlx::query("SELECT a.id, a.filename, a.size, a.is_dir, b.slices, b.slices_hash FROM file as a join file_histories as b on a.id = b.id and a.version = b.version WHERE a.uid = $1 and a.id = $2 and is_deleted = false")
             .bind(uid)
             .bind(id)
             .fetch_one(pool)
@@ -82,7 +99,7 @@ impl Files {
         pool: &PgPool,
     ) -> Result<Vec<Files>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT * FROM files WHERE parent_dir_id = $1 and uid = $2 and is_delete = false",
+            "SELECT * FROM files WHERE parent_dir_id = $1 and uid = $2 and is_deleted = false",
         )
         .bind(parent_dir_id)
         .bind(uid)
@@ -98,10 +115,12 @@ impl Files {
     }
 
     // check file or dir if owned by user
-    pub async fn check_owner(uid: Uuid, id: i64, pool: &PgPool) -> Result<Option<Files>, sqlx::Error> {
-        let row = sqlx::query("SELECT * FROM files WHERE uid = $1 and id = $2 and is_delete = false")
+    pub async fn check_owner(uid: Uuid, id: i64, ws_id: Uuid, pool: &PgPool) -> Result<Option<Files>, sqlx::Error> {
+        let row = sqlx::query("SELECT * FROM files WHERE uid = $1 and id = $2 \
+        and ws_id = $3 and is_deleted = false")
             .bind(uid)
             .bind(id)
+            .bind(ws_id)
             .fetch_optional(pool)
             .await?;
         match row {
@@ -115,18 +134,18 @@ impl Files {
     }
 
     pub async fn insert_dir(
-        id: i64,
-        uid: Uuid,
-        dir_name: &str,
-        parent_dir_id: i64,
+        &self,
         pool: &PgPool,
     ) -> Result<Files, sqlx::Error> {
-        let row = sqlx::query("INSERT INTO files (id, uid, filename, parent_dir_id, is_dir) VALUES ($1, $2, $3, $4, $5) RETURNING *")
-            .bind(id)
-            .bind(uid)
-            .bind(dir_name)
-            .bind(parent_dir_id)
-            .bind(true)
+        let row = sqlx::query("INSERT INTO files (id, uid, ws_id, filename, parent_dir_id, size, is_dir) \
+        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *")
+            .bind(self.id)
+            .bind(self.uid)
+            .bind(self.ws_id)
+            .bind(&self.filename)
+            .bind(self.parent_dir_id)
+            .bind(self.size)
+            .bind(self.is_dir)
             .fetch_one(pool)
             .await?;
 
@@ -140,9 +159,11 @@ impl Files {
         pool: &PgPool,
     ) -> Result<(), sqlx::Error> {
         let mut tx = pool.begin().await?;
-        let row = sqlx::query("INSERT INTO files (id, uid, filename, parent_dir_id, size, is_dir) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *")
+        sqlx::query("INSERT INTO files (id, uid, ws_id, filename, parent_dir_id, size, is_dir) \
+        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *")
             .bind(self.id)
             .bind(self.uid)
+            .bind(self.ws_id)
             .bind(&self.filename)
             .bind(self.parent_dir_id)
             .bind(self.size)
@@ -150,7 +171,8 @@ impl Files {
             .fetch_one(&mut tx)
             .await?;
 
-        sqlx::query("INSERT INTO file_history (id, file_version, slices, slices_hash) VALUES ($1, $2, $3, $4)")
+        sqlx::query("INSERT INTO file_histories (fid, file_version, slices, slices_hash) \
+        VALUES ($1, $2, $3, $4)")
             .bind(self.id)
             .bind(self.version)
             .bind(slice)
@@ -196,7 +218,7 @@ impl Files {
             .fetch_one(&mut tx)
             .await?;
         
-        sqlx::query("INSERT INTO file_history (id, file_version, slices, slices_hash) VALUES ($1, $2, $3, $4)")
+        sqlx::query("INSERT INTO file_histories (id, file_version, slices, slices_hash) VALUES ($1, $2, $3, $4)")
             .bind(self.id)
             .bind(self.version)
             .bind(slice)
@@ -210,12 +232,12 @@ impl Files {
     }
 
     pub async fn delete(&self, pool: &PgPool) -> Result<(), sqlx::Error> {
-        let _ = sqlx::query(
-            "UPDATE files SET is_delete = true WHERE id = $1 and uid = $2 RETURNING *",
+        sqlx::query(
+            "UPDATE files SET is_deleted = true WHERE id = $1 and uid = $2",
         )
         .bind(self.id)
         .bind(self.uid)
-        .fetch_one(pool)
+        .execute(pool)
         .await?;
 
         Ok(())

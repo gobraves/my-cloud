@@ -2,7 +2,8 @@
 -- postgresql 
 create table files (
     id bigint not null primary key,
-    uid bigint not null,
+    uid uuid not null,
+    ws_id uuid not null,
     filename varchar(255) not null,
     parent_dir_id bigint not null,
     is_deleted boolean not null default false,

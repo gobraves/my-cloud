@@ -12,6 +12,11 @@ use sha2::Sha384;
 use time::OffsetDateTime;
 use uuid::Uuid;
 use crate::api::Result;
+use std::sync::Arc;
+use serde::{Deserialize, Serialize};
+use serde_json;
+use redis::{self, AsyncCommands};
+use crate::api_common::storages::SessionInfo;
 
 const DEFAULT_SESSION_LENGTH: time::Duration = time::Duration::weeks(1);
 
@@ -36,7 +41,7 @@ pub struct AuthUser {
 /// is *any* error in deserializing, which isn't exactly what we want.
 pub struct MaybeAuthUser(pub Option<AuthUser>);
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct AuthUserClaims {
     user_id: Uuid,
     exp: i64,
@@ -70,7 +75,7 @@ impl AuthUser {
         let token = &auth_header[SCHEME_PREFIX.len()..];
 
         let jwt =
-            jwt::Token::<jwt::Header, AuthUserClaims, _>::parse_unverified(token).map_err(|e| {
+            jwt::Token::<jwt::Header, AuthUserClaims, _>::parse_unverified(token).map_err(|_e| {
                 CustomError::Unauthorized
             })?;
 
@@ -83,7 +88,7 @@ impl AuthUser {
         // When choosing a JWT implementation, be sure to check that it validates that the signing
         // algorithm declared in the token matches the signing algorithm you're verifying with.
         // The `jwt` crate does.
-        let jwt = jwt.verify_with_key(&hmac).map_err(|e| {
+        let jwt = jwt.verify_with_key(&hmac).map_err(|_e| {
             CustomError::Unauthorized
         })?;
 
@@ -145,5 +150,67 @@ where
 
         let user: Option<AuthUser> = AuthUser::from_authorization(&ctx, auth_header).map(Some).unwrap_or(None);
         Ok(Self(user))
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AuthUploadInfo {
+    pub session_id: Uuid,
+    pub chunk_num: usize,
+    pub chunk_size: usize,
+    pub hash: String,
+}
+
+impl AuthUploadInfo {
+    pub async fn from_header(session_header: &HeaderValue) -> Result<Self> {
+        let session_header = session_header.to_str().map_err(|_| {
+            CustomError::Unauthorized
+        })?;
+
+        let upload_info: AuthUploadInfo = serde_json::from_str(session_header).map_err(|_| {
+            CustomError::Unauthorized
+        })?;
+
+        Ok(upload_info)
+    }
+}
+
+#[async_trait]
+impl<S> FromRequestParts<S> for AuthUploadInfo 
+where
+    S: Send + Sync,
+{
+    type Rejection = CustomError;
+
+    async fn from_request_parts(req: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let ctx: Extension<ApiContext> = Extension::from_request_parts(req, _state)
+            .await
+            .expect("BUG: ApiContext was not added as an extension");
+
+        let auth_header = req.headers
+            .get(AUTHORIZATION)
+            .ok_or(CustomError::Unauthorized)?;
+
+        let auth_user = AuthUser::from_authorization(&ctx, auth_header)?;
+
+        let header_value = req.headers.get("x-cloud-session").ok_or(CustomError::Unauthorized)?;
+        let redis_client = Arc::clone(&ctx.redis_client);
+        let mut redis_conn = redis_client.get_async_connection().await?;
+
+        let upload_info = AuthUploadInfo::from_header(header_value).await?;
+
+        let session_info = redis_conn
+            .get::<String, String>(upload_info.session_id.to_string())
+            .await?;
+
+        let session_info: SessionInfo = serde_json::from_str(&session_info).map_err(|_| {
+            CustomError::Unauthorized
+        })?;
+        
+        if session_info.user_id != auth_user.user_id {
+            return Err(CustomError::Unauthorized);
+        }
+
+        Ok(upload_info)
     }
 }

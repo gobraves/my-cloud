@@ -2,9 +2,11 @@ use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use clap::Parser;
 use std::time::Duration;
+use log;
+use redis;
 use cloud_web::api;
 use cloud_web::config::Config;
-use log;
+
 
 
 #[tokio::main]
@@ -20,6 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     let config = Config::parse();
     log::info!("config: {:?}", config);
     
+    let redis = redis::Client::open(config.redis_connection_str.as_str())?;
 
     let pool = PgPoolOptions::new()
         //.max_connections(config.connection_num)
@@ -28,6 +31,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
         .await
         .expect("can't connect to db");
 
-    api::serve(config, pool).await?;
+    api::serve(config, pool, redis).await?;
     Ok(())
 }

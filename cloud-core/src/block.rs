@@ -2,6 +2,7 @@ pub mod fs_handler;
 pub mod s3_handler;
 use anyhow::Result;
 use bytes::Bytes;
+use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -17,7 +18,8 @@ impl <BH: BlockHandler> BlockHandlerWrapper<BH> {
     }
 }
 
-pub trait BlockHandler {
+#[async_trait]
+pub trait BlockHandler: Send + Sync {
     fn write_blocks(&self, blocks: Vec<Block>) -> Result<()>;
     fn get_blocks(&self, blocks_name: Vec<&str>) -> Result<Vec<Block>>;
 }

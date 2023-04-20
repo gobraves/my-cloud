@@ -1,2 +1,3 @@
-pub mod user;
-pub mod storage;
+pub mod users;
+pub mod storages;
+pub mod workspaces;

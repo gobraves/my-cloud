@@ -1,6 +1,7 @@
 use sqlx::postgres::{PgPool, PgRow};
 use sqlx::{FromRow, Row};
-use sqlx::types::Uuid;
+use uuid::Uuid;
+
 
 #[derive(Debug, FromRow)]
 pub struct Users {
@@ -13,6 +14,15 @@ pub struct Users {
 }
 
 impl Users {
+    pub fn new(name: String, email: String, password_hash: String) -> Self {
+        Self {
+            id: Uuid::now_v7(),
+            name,
+            email,
+            password_hash,
+        }
+    }
+
     fn from_row(row: &PgRow) -> Self {
         Self {
             id: row.get("id"),
@@ -69,17 +79,16 @@ impl Users {
     }
 
     pub async fn insert(
-        name: &str,
-        password_hash: &str,
-        email: &str,
+        &self,
         pool: &PgPool,
     ) -> Result<Users, sqlx::Error> {
         let row = sqlx::query(
             "INSERT INTO users (id, name, password_hash, email) VALUES ($1, $2, $3, $4) RETURNING *",
         )
-        .bind(name)
-        .bind(password_hash)
-        .bind(email)
+        .bind(&self.id)
+        .bind(&self.name)
+        .bind(&self.password_hash)
+        .bind(&self.email)
         .fetch_one(pool)
         .await?;
 

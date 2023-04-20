@@ -1,4 +1,6 @@
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StorageBody<T> {
@@ -9,6 +11,18 @@ pub struct StorageBody<T> {
 pub struct StorageReq {
     pub is_dir: Option<&'static str>,
     pub filename: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListStorageReq {
+    pub parent_dir_id: Option<i64>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct UploadFileReq {
+    pub filename: String,
+    pub is_dir: bool,
+    pub parent_dir_id: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -43,12 +57,36 @@ impl Storage {
 
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CreateSession {
+pub struct CreateSessionReq {
     pub filename: String,
-    pub parent_dir_id: String,
+    pub ws_id: Uuid,
+    pub parent_dir_id: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Session {
-    pub session_id: String
+    pub session_id: Uuid
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionInfo {
+    pub user_id: Uuid,
+    pub ws_id: Uuid,
+    pub filename: String,
+    pub parent_dir_id: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BlockInfo {
+    pub block_name: String,
+    pub block_index: usize,
+    pub block_size: usize,
+    pub block_hash: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UploadFinishReq {
+    pub total_chunk_num: usize,
+}
+
+

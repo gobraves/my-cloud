@@ -6,12 +6,12 @@ use uuid::Uuid;
 #[test]
 fn test_fs_handler() {
     let content = Bytes::from("Hello World");
-    let uuid = Uuid::new_v4().to_string().replace("-", "");
+    let uuid = Uuid::now_v7().to_string();
 
     println!("uuid: {}", uuid);
-    let block = Block::new(uuid, content.clone());
+    let block = Block::new(uuid.clone(), content.clone());
 
-    let target_dir = "/home/neo/Downloads/";
+    let target_dir = ".";
     let fs_handler = FsHandler::new(target_dir);
     let blocks = vec![block];
     fs_handler.write_blocks(blocks).unwrap();

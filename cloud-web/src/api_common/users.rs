@@ -1,17 +1,19 @@
+use uuid::Uuid;
+
 /// A wrapper type for all requests/responses from these routes.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct UserBody<T> {
     pub user: T,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct NewUser {
     pub username: String,
     pub email: String,
     pub password: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct LoginUser {
     pub email: String,
     pub password: String,
@@ -25,9 +27,11 @@ pub struct UpdateUser {
     pub password: Option<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct User {
     pub email: String,
     pub token: String,
     pub username: String,
 }
+
+

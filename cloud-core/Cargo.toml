@@ -8,9 +8,11 @@ edition = {workspace = true}
 [dependencies]
 anyhow = "1.0.70"
 bytes = "1.4.0"
-crypto = { version = "0.4.0", features = ["std"] }
+#crypto = { version = "0.4.0", features = ["std"] }
 serde = { version = "1.0.159", features = ["serde_derive"] }
 sha2 = "0.10.6"
 sqlx = { version = "0.6.3", features = ["postgres", "runtime-tokio-rustls", "chrono", "uuid"] }
 thiserror = "1.0.40"
-uuid = { version = "1.3.0", features = ["v4"] }
+uuid = { version = "1.3.0", features = ["v7"] }
+cloud-utils = { path = "../cloud-utils" }
+async-trait = "0.1.68"

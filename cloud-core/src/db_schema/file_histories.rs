@@ -24,7 +24,7 @@ impl FileHistories {
     }
 
     pub async fn find_by_id(id: i64, pool: &PgPool) -> Result<FileHistories, sqlx::Error> {
-        let row = sqlx::query("SELECT * FROM file_history WHERE id = $1")
+        let row = sqlx::query("SELECT * FROM file_histories WHERE id = $1")
             .bind(id)
             .fetch_one(pool)
             .await?;
@@ -33,7 +33,7 @@ impl FileHistories {
     }
 
     pub async fn find_by_fid(fid: i64, pool: &PgPool) -> Result<FileHistories, sqlx::Error> {
-        let row = sqlx::query("SELECT * FROM file_history WHERE fid = $1")
+        let row = sqlx::query("SELECT * FROM file_histories WHERE fid = $1")
             .bind(fid)
             .fetch_one(pool)
             .await?;
@@ -49,7 +49,7 @@ impl FileHistories {
         pool: &PgPool,
     ) -> Result<FileHistories, sqlx::Error> {
         let row = sqlx::query(
-            "INSERT INTO file_history (fid, file_version, slices, slices_hash) VALUES ($1, $2, $3, $4) RETURNING *",
+            "INSERT INTO file_histories (fid, file_version, slices, slices_hash) VALUES ($1, $2, $3, $4) RETURNING *",
         )
         .bind(fid)
         .bind(file_version)
